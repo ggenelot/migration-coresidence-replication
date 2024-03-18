@@ -5,7 +5,153 @@ date: "2024-02-27"
 output: html_document
 ---
 
+```{r}
+library(haven)
+library(ggplot2)
+library(dplyr)
+```
+
+
 Ce document cherche à reproduire le raisonnement de la section 4.1 de l'article. Il s'agit du rapport entre la migration et l'arrivée de nouveaux membres dans le foyer. 
 
 Plus généralement, il s'agit de répondre à cette question : « Do households that experience an international migration episode also undergo further changes in their composition? » ([Bertoli et Murard, 2020, p. 2](zotero://select/library/items/728S6LQ5)) ([pdf](zotero://open-pdf/library/items/TZXTC4Y6?page=2&annotation=5C3QP76M))
 
+## Empirical analysis
+
+### Chargement des données
+
+Cette analyse va se réaliser sur l'échantillon (sans attrition) de 141,168 foyers. On cherche à le charger ici. 
+
+Les donées sont réparties en différents fichiers, qui correspondent chacune à un panel. La première étape consiste à les charger un par un, puis à les fusionner pour avoir un fichier unique.
+
+```{r}
+# Charger les fichiers
+final_data_panel_105 <- read_dta("replication_data/data/final_data_panel_105.dta")
+final_data_panel_205 <- read_dta("replication_data/data/final_data_panel_205.dta")
+final_data_panel_305 <- read_dta("replication_data/data/final_data_panel_305.dta")
+final_data_panel_405 <- read_dta("replication_data/data/final_data_panel_405.dta")
+final_data_panel_106 <- read_dta("replication_data/data/final_data_panel_106.dta")
+final_data_panel_206 <- read_dta("replication_data/data/final_data_panel_206.dta")
+final_data_panel_306 <- read_dta("replication_data/data/final_data_panel_306.dta")
+final_data_panel_406 <- read_dta("replication_data/data/final_data_panel_406.dta")
+
+# Combine the datasets
+final_data_combined <- rbind(final_data_panel_105, final_data_panel_205, final_data_panel_305,
+                              final_data_panel_405, final_data_panel_106, final_data_panel_206,
+                              final_data_panel_306, final_data_panel_406)
+
+```
+
+Il semblerait que la quantité de données à traiter soit trop importante pour mon ordinateur. On va donc procéder avec uniquement un des panel, en faisant comme si c'était l'ensemble des panels. 
+
+```{r}
+final_data_combined <- read_dta("replication_data/data/final_data_panel_105.dta")
+
+```
+
+Il y a ensuite un certain nombre de pré-traitements qui sont réalisés dans le code original. Il faut comprendre à quoi ils servent pour voir ceux que l'on garde ou pas. 
+
+Un des premiers consiste à drop toutes les colonnes qui commencent par __ : cap drop __*
+Il s'agit problement d'une sorte de sécurité pour éviter que les variables interragissent avec les variables internes de stata. 
+```{r}
+
+column_names <- colnames(final_data_combined)
+columns_with_double_underscore <- column_names[grep("^__", column_names)]
+print(columns_with_double_underscore)
+```
+Dans tous les cas, cette mesure ne change rien à nos résultats puisqu'aucune variables n'est concernée. On peut donc sans crainte l'éxecuter.
+
+```{r}
+# Drop variables starting with "__"
+final_data_combined <- final_data_combined[, !grepl("^__", names(final_data_combined))]
+```
+
+La seconde étape de pré-traitement consiste en renommer les variables : 
+
+label var HHnewmember_allperiod  "hh new memb all-period"
+label var HHnewmember  "new member joining" 
+
+```{r}
+attr(final_data_combined$HHnewmember_allperiod, "label") <- "hh new memb all-period"
+attr(final_data_combined$HHnewmember, "label") <- "new member joining"
+```
+
+La troisième étape consiste en créer deux nouvelles variables : hh et hhper. La première désigne le numéro du foyer (HouseHold); la seconde  ??????? . Avant de créer ces deux variables, il convient de s'assure qu'aucune variable avec ces noms n'existe déjà, et de les supprimer si c'est le cas. 
+
+cap drop hh 
+	cap drop hhper 
+	bys id_h  : g hh = _n==1
+	bys id_h PER : g hhper = _n==1
+
+
+```{r}
+
+# On regarde si hh existe, et si oui, on la supprime
+if ("hh" %in% names(data)) {
+  data$hh <- NULL
+}
+
+# idem pour hhper
+if ("hhper" %in% names(data)) {
+  data$hhper <- NULL
+}
+
+# On créé la variable hh : on regroupe les valeurs pas id_h, c'est à dire l'identifiant du foyer, et si la variable est la première du foyer (= première ligne du groupe), elle prend la valeur 1, et 0 sinon
+
+data <- data %>%
+  arrange(id_h) %>%
+  group_by(id_h) %>%
+  mutate(hh = ifelse(row_number() == 1, 1, 0))
+
+# Idem pour hhper
+data <- data %>%
+  arrange(id_h, PER) %>%
+  group_by(id_h, PER) %>%
+  mutate(hhper = ifelse(row_number() == 1, 1, 0))
+
+
+```
+
+
+
+```{r}
+
+# Set variable labels
+attr(final_data_combined$HHnewmember_allperiod, "label") <- "hh new memb all-period"
+attr(final_data_combined$HHnewmember, "label") <- "new member joining"
+
+
+# Drop variables hh and hhper
+final_data_combined <- subset(final_data_combined, select = -c(hh, hhper))
+
+# Create variables hh and hhper using group information
+final_data_combined$hh <- ave(seq_along(final_data_combined$id_h), final_data_combined$id_h, FUN = function(x) seq_along(x) == 1)
+final_data_combined$hhper <- ave(seq_along(final_data_combined$id_h), final_data_combined$id_h, final_data_combined$PER, FUN = function(x) seq_along(x) == 1)
+
+# CONTROLS section
+final_data_combined$id_mun <- as.integer(interaction(final_data_combined$ENT, final_data_combined$MUN))
+final_data_combined$id_panelgroup <- as.integer(interaction(final_data_combined$panel_group))
+
+# Set global demo_control
+Ncohorts <- ((70/5) + 1)
+demo_control <- character(0)
+for (x in 1:Ncohorts) {
+  a0 <- 5 * (x - 1)
+  a1 <- 5 * x - 1
+  demo_control <- c(demo_control, paste("nbq1_male_", a0, "_", a1, sep = ""), paste("nbq1_fem_", a0, "_", a1, sep = ""))
+}
+
+# Create nonhhnuclear_q1 variable
+final_data_combined$nonhhnuclear_q1 <- final_data_combined$hhnuclear_q1 == 0
+label(final_data_combined$nonhhnuclear_q1) <- "non-nuclear household q1"
+
+# Set global control
+control <- paste("i.hhmaxedu_q1", collapse = " ")
+
+# Set global option varlabels
+option <- list(varlabels = c("tex", "plain", "fragment", "bdec(3)", "se", "starloc(1)", "starlevels(10 5 1)", "nocenter"))
+```
+
+
+
+### Réduction de la dimension longitudinale
