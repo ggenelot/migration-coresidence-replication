@@ -132,6 +132,7 @@ La fonction group permet dedonner un numéro idetifiant à touts les observation
 # Creation des variables de controle
 final_data_combined$id_mun <- as.numeric(interaction(final_data_combined$ENT, final_data_combined$MUN))
 final_data_combined$id_panelgroup <- as.numeric(interaction(final_data_combined$panel_group))
+final_data_combined$id_panelgroup <- 
 ```
 
 Les auteurs génèrent une variable globale demo_control, qui prend comme valeur le nom de la cohorte. 
@@ -208,7 +209,8 @@ column <- colnames(final_data_combined)
 
 ```{r}
 # Loop over different types of areas
-for (place in c("all", "urb", "rur")) {
+#for (place in c("all", "urb", "rur")) {
+place <- "all"
   # Create sample variable
   samplee <- NULL
   if (place == "all") {
@@ -229,7 +231,7 @@ for (place in c("all", "urb", "rur")) {
   # Perform regressions and output tables
   for (i in 1:2) {
     # OLS regression
-    ols_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + id_panelgroup, data = subset(final_data_combined, samplee)) #erreur ici, j'essaie de retirer control
+    ols_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + factor(id_panelgroup) + control, data = subset(final_data_combined, samplee)) #erreur ici, j'essaie de retirer control
     ols_output <- coeftest(ols_model, vcov = vcovHC(ols_model, cluster = ~id_h))
     
     # Output OLS regression results
@@ -246,10 +248,10 @@ for (place in c("all", "urb", "rur")) {
     write.csv(ols_results, file = paste0("ols_results_", place, "_", i, ".csv"), row.names = FALSE)
     
     # Fixed effects regression
-    fe_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + id_panelgroup + control, data = subset(final_data_combined, samplee))
+    fe_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + factor(id_panelgroup) + control, data = subset(final_data_combined, samplee))
     fe_output <- coeftest(fe_model, vcov = vcovHC(fe_model, cluster = ~id_h))
     
-    # Output fixed effects regression results
+    #    # Output fixed effects regression results
     fe_results <- data.frame(
       "Household controls" = "X",
       "Municipality FE" = "X",
@@ -257,12 +259,14 @@ for (place in c("all", "urb", "rur")) {
       "F-test controls" = "",
       ctitle = rep("", nrow(fe_output))
     )
-    fe_results <- rbind(fe_results, cbind(fe_output[, 1], rownames(fe_output)))
+    fe_results <- cbind.data.frame(fe_results, fe_output[, 1, drop = FALSE])
+    fe_results <- cbind(fe_results, rownames = rownames(fe_output))
     
     # Output fixed effects results table (replace 'fe_results_all_1.csv' with actual file names)
     write.csv(fe_results, file = paste0("fe_results_", place, "_", i, ".csv"), row.names = FALSE)
+
   }
-}
+#}
 
 # Output tables (replace 'ols_results_all_1.csv' with actual file names)
 # Table 4
@@ -278,121 +282,3 @@ table6 <- read.csv("ols_results_rur_1.csv")
 write.csv(table6, file = "Table6.csv", row.names = FALSE)
 
 ```
-
-
-```{r}
-# Loop over different types of areas
-for (place in c("all", "urb", "rur")) {
-  # Create sample variable
-  samplee <- NULL
-  if (place == "all") {
-    samplee <- final_data_combined$present_N_ENT_12345 == 1 & final_data_combined$hh == 1
-  } else if (place == "rur") {
-    samplee <- final_data_combined$present_N_ENT_12345 == 1 & final_data_combined$hh == 1 & final_data_combined$ruralarea == 1
-  } else if (place == "urb") {
-    samplee <- final_data_combined$present_N_ENT_12345 == 1 & final_data_combined$hh == 1 & final_data_combined$ruralarea == 0
-  }
-  
-  # Calculate average non-migrant
-  av1 <- round(mean(final_data_combined$HHnewmember_allperiod[samplee]), 0.001)
-  
-  # Define control variables
-  control <- c("i.hhmaxedu_q1")
-  
-  # Perform regressions and output tables
-  for (i in 1:2) {
-    # OLS regression
-    ols_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + id_panelgroup + control, data = subset(final_data_combined, samplee))
-    ols_output <- coeftest(ols_model, vcov = vcovHC(ols_model, cluster = ~id_h))
-    
-    # Output OLS regression results
-    ols_results <- data.frame(
-      "Household controls" = "X",
-      "Municipality FE" = "",
-      "Average non-migrant" = av1,
-      "F-test controls" = "",
-      ctitle = rep("", nrow(ols_output))
-    )
-    ols_results <- rbind(ols_results, cbind(ols_output[, 1], rownames(ols_output)))
-    
-    # Output OLS results table (replace 'ols_results_all_1.csv' with actual file names)
-    write.csv(ols_results, file = paste0("ols_results_", place, "_", i, ".csv"), row.names = FALSE)
-    
-    # ne marche pas avec i.id_panelgroup, j essaie avec juste id_panelgroup
-    
-    # Fixed effects regression
-    fe_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + id_panelgroup + control, data = subset(final_data_combined, samplee))
-    fe_output <- coeftest(fe_model, vcov = vcovHC(fe_model, cluster = ~id_h))
-    
-    # Output fixed effects regression results
-    fe_results <- data.frame(
-      "Household controls" = "X",
-      "Municipality FE" = "X",
-      "Average non-migrant" = av1,
-      "F-test controls" = "",
-      ctitle = rep("", nrow(fe_output))
-    )
-    fe_results <- rbind(fe_results, cbind(fe_output[, 1], rownames(fe_output)))
-    
-    # Output fixed effects results table (replace 'fe_results_all_1.csv' with actual file names)
-    write.csv(fe_results, file = paste0("fe_results_", place, "_", i, ".csv"), row.names = FALSE)
-  }
-}
-
-# Output tables (replace 'ols_results_all_1.csv' with actual file names)
-# Table 4
-table4 <- read.csv("ols_results_all_1.csv")
-write.csv(table4, file = "Table4.csv", row.names = FALSE)
-
-# Table 5
-table5 <- read.csv("ols_results_urb_1.csv")
-write.csv(table5, file = "Table5.csv", row.names = FALSE)
-
-# Table 6
-table6 <- read.csv("ols_results_rur_1.csv")
-write.csv(table6, file = "Table6.csv", row.names = FALSE)
-```
-
-
-
-```{r}
-
-# Set variable labels
-attr(final_data_combined$HHnewmember_allperiod, "label") <- "hh new memb all-period"
-attr(final_data_combined$HHnewmember, "label") <- "new member joining"
-
-
-# Drop variables hh and hhper
-final_data_combined <- subset(final_data_combined, select = -c(hh, hhper))
-
-# Create variables hh and hhper using group information
-final_data_combined$hh <- ave(seq_along(final_data_combined$id_h), final_data_combined$id_h, FUN = function(x) seq_along(x) == 1)
-final_data_combined$hhper <- ave(seq_along(final_data_combined$id_h), final_data_combined$id_h, final_data_combined$PER, FUN = function(x) seq_along(x) == 1)
-
-# CONTROLS section
-final_data_combined$id_mun <- as.integer(interaction(final_data_combined$ENT, final_data_combined$MUN))
-final_data_combined$id_panelgroup <- as.integer(interaction(final_data_combined$panel_group))
-
-# Set global demo_control
-Ncohorts <- ((70/5) + 1)
-demo_control <- character(0)
-for (x in 1:Ncohorts) {
-  a0 <- 5 * (x - 1)
-  a1 <- 5 * x - 1
-  demo_control <- c(demo_control, paste("nbq1_male_", a0, "_", a1, sep = ""), paste("nbq1_fem_", a0, "_", a1, sep = ""))
-}
-
-# Create nonhhnuclear_q1 variable
-final_data_combined$nonhhnuclear_q1 <- final_data_combined$hhnuclear_q1 == 0
-label(final_data_combined$nonhhnuclear_q1) <- "non-nuclear household q1"
-
-# Set global control
-control <- paste("i.hhmaxedu_q1", collapse = " ")
-
-# Set global option varlabels
-option <- list(varlabels = c("tex", "plain", "fragment", "bdec(3)", "se", "starloc(1)", "starlevels(10 5 1)", "nocenter"))
-```
-
-
-
-### Réduction de la dimension longitudinale
