@@ -16,29 +16,33 @@ Ce document cherche à reproduire le raisonnement de la section 4.1 de l'article
 
 Plus généralement, il s'agit de répondre à cette question : « Do households that experience an international migration episode also undergo further changes in their composition? » ([Bertoli et Murard, 2020, p. 2](zotero://select/library/items/728S6LQ5)) ([pdf](zotero://open-pdf/library/items/TZXTC4Y6?page=2&annotation=5C3QP76M))
 
-## Empirical analysis
+# Empirical analysis
 
-### Chargement des données
+## Chargement des données
 
 Cette analyse va se réaliser sur l'échantillon (sans attrition) de 141,168 foyers. On cherche à le charger ici. 
 
+### Charger et fusionner les fichiers
+
 Les donées sont réparties en différents fichiers, qui correspondent chacune à un panel. La première étape consiste à les charger un par un, puis à les fusionner pour avoir un fichier unique.
+
+
 
 ```{r}
 # Charger les fichiers
-final_data_panel_105 <- read_dta("replication_data/data/final_data_panel_105.dta")
-final_data_panel_205 <- read_dta("replication_data/data/final_data_panel_205.dta")
-final_data_panel_305 <- read_dta("replication_data/data/final_data_panel_305.dta")
-final_data_panel_405 <- read_dta("replication_data/data/final_data_panel_405.dta")
-final_data_panel_106 <- read_dta("replication_data/data/final_data_panel_106.dta")
-final_data_panel_206 <- read_dta("replication_data/data/final_data_panel_206.dta")
-final_data_panel_306 <- read_dta("replication_data/data/final_data_panel_306.dta")
-final_data_panel_406 <- read_dta("replication_data/data/final_data_panel_406.dta")
-
-# Combine the datasets
-final_data_combined <- rbind(final_data_panel_105, final_data_panel_205, final_data_panel_305,
-                              final_data_panel_405, final_data_panel_106, final_data_panel_206,
-                              final_data_panel_306, final_data_panel_406)
+# final_data_panel_105 <- read_dta("replication_data/data/final_data_panel_105.dta")
+# final_data_panel_205 <- read_dta("replication_data/data/final_data_panel_205.dta")
+# final_data_panel_305 <- read_dta("replication_data/data/final_data_panel_305.dta")
+# final_data_panel_405 <- read_dta("replication_data/data/final_data_panel_405.dta")
+# final_data_panel_106 <- read_dta("replication_data/data/final_data_panel_106.dta")
+# final_data_panel_206 <- read_dta("replication_data/data/final_data_panel_206.dta")
+# final_data_panel_306 <- read_dta("replication_data/data/final_data_panel_306.dta")
+# final_data_panel_406 <- read_dta("replication_data/data/final_data_panel_406.dta")
+# 
+# # Combine the datasets
+# final_data_combined <- rbind(final_data_panel_105, final_data_panel_205, final_data_panel_305,
+#                               final_data_panel_405, final_data_panel_106, final_data_panel_206,
+#                               final_data_panel_306, final_data_panel_406)
 
 ```
 
@@ -53,6 +57,9 @@ Il y a ensuite un certain nombre de pré-traitements qui sont réalisés dans le
 
 Un des premiers consiste à drop toutes les colonnes qui commencent par __ : cap drop __*
 Il s'agit problement d'une sorte de sécurité pour éviter que les variables interragissent avec les variables internes de stata. 
+
+### Nettoyer les données
+
 ```{r}
 
 column_names <- colnames(final_data_combined)
@@ -87,29 +94,179 @@ cap drop hh
 ```{r}
 
 # On regarde si hh existe, et si oui, on la supprime
-if ("hh" %in% names(data)) {
-  data$hh <- NULL
+if ("hh" %in% names(final_data_combined)) {
+  final_data_combined$hh <- NULL
 }
 
 # idem pour hhper
-if ("hhper" %in% names(data)) {
-  data$hhper <- NULL
+if ("hhper" %in% names(final_data_combined)) {
+  final_data_combined$hhper <- NULL
 }
 
 # On créé la variable hh : on regroupe les valeurs pas id_h, c'est à dire l'identifiant du foyer, et si la variable est la première du foyer (= première ligne du groupe), elle prend la valeur 1, et 0 sinon
 
-data <- data %>%
+final_data_combined <- final_data_combined %>%
   arrange(id_h) %>%
   group_by(id_h) %>%
   mutate(hh = ifelse(row_number() == 1, 1, 0))
 
 # Idem pour hhper
-data <- data %>%
+final_data_combined <- final_data_combined %>%
   arrange(id_h, PER) %>%
   group_by(id_h, PER) %>%
   mutate(hhper = ifelse(row_number() == 1, 1, 0))
 
 
+```
+
+### Controls
+
+Dans la section suivante, on génère plusieurs variables de contrôle. 
+
+La fonction group permet dedonner un numéro idetifiant à touts les observations qui ont une même combinaison de facteur. Elle permet donc de créer des variables de contrôle. Ici, on veut une variable de contrôle (ENT et MUN), et une panel_group
+
+```{r}
+# Creation des variables de controle
+final_data_combined$id_mun <- as.numeric(interaction(data$ENT, data$MUN))
+final_data_combined$id_panelgroup <- as.numeric(interaction(data$panel_group))
+```
+
+Les auteurs génèrent une variable globale demo_control, qui prend comme valeur le nom de la cohorte. 
+
+```{r}
+demo_control <- character()
+Ncohorts <- ((70/5) + 1)
+for (x in 1:Ncohorts) {
+  a0 <- 5 * (x - 1)
+  a1 <- 5 * x - 1
+  demo_control <- c(demo_control, 
+                    paste("nbq1_male_", a0, "_", a1, sep = ""),
+                    paste("nbq1_fem_", a0, "_", a1, sep = ""))
+}
+
+```
+
+
+Les auteurs génèrent ensuite d'autres variables : 
+
+nonhhnuclear_q1 est la valeur booléenne de l'expression "hhnuclear_q1==0" (=1 si cette expression est vraie, 0 sinon)
+
+```{r}
+# valeur booleenne et label
+final_data_combined$nonhhnuclear_q1 <- ifelse(data$hhnuclear_q1 == 0, 1, 0)
+attr(data$nonhhnuclear_q1, "label") <- "non-nuclear household q1"
+
+# stockage des variables de controle et de la variable i.hhmaxedu_q1
+control <- c(demo_control, "i.hhmaxedu_q1")
+```
+
+Enfin, on renomme les variables : 
+
+```{r}
+
+#on stocke les valeurs de chaque label
+variable_labels <- list(
+  HH_mex_before = "Mex mig before",
+  HHusmig_allperiod = "US mig  entire-period",
+  HHusmig_fem_allperiod = "US mig female entire-period",
+  HHmexmig_allperiod = "Mex mig  entire-period",
+  HHmexmig_fem_allperiod = "Mex mig female entire-period",
+  HHnewmemb_nomexmig_allperiod = "HH new member excl. US&Mex mig",
+  HHnewmemb_noleaving_allperiod = "HH new member excl. all movingout"
+)
+
+# on applique ces valeurs dans la table
+for (var in names(variable_labels)) {
+  attr(final_data_combined[[var]], "label") <- variable_labels[[var]]
+}
+```
+
+La dernière ligne du code stata consiste à appliquer des options. Celles-ci sont transcrite comme suit en python. 
+
+```{r}
+# Set options
+options <- list(
+  varlabels = "tex plain fragment",
+  bdec = 3,
+  se = TRUE,
+  starloc = 1,
+  starlevels = c(10, 5, 1),
+  nocenter = TRUE
+)
+
+```
+
+## Table 4, 5, 6 
+
+```{r}
+# Loop over different types of areas
+for (place in c("all", "urb", "rur")) {
+  # Create sample variable
+  samplee <- NULL
+  if (place == "all") {
+    samplee <- final_data_combined$present_N_ENT_12345 == 1 & final_data_combined$hh == 1
+  } else if (place == "rur") {
+    samplee <- final_data_combined$present_N_ENT_12345 == 1 & final_data_combined$hh == 1 & final_data_combined$ruralarea == 1
+  } else if (place == "urb") {
+    samplee <- final_data_combined$present_N_ENT_12345 == 1 & final_data_combined$hh == 1 & final_data_combined$ruralarea == 0
+  }
+  
+  # Calculate average non-migrant
+  av1 <- round(mean(final_data_combined$HHnewmember_allperiod[samplee]), 0.001)
+  
+  # Define control variables
+  control <- c("i.hhmaxedu_q1")
+  
+  # Perform regressions and output tables
+  for (i in 1:2) {
+    # OLS regression
+    ols_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + i.id_panelgroup + control, data = subset(final_data_combined, samplee))
+    ols_output <- coeftest(ols_model, vcov = vcovHC(ols_model, cluster = ~id_h))
+    
+    # Output OLS regression results
+    ols_results <- data.frame(
+      "Household controls" = "X",
+      "Municipality FE" = "",
+      "Average non-migrant" = av1,
+      "F-test controls" = "",
+      ctitle = rep("", nrow(ols_output))
+    )
+    ols_results <- rbind(ols_results, cbind(ols_output[, 1], rownames(ols_output)))
+    
+    # Output OLS results table (replace 'ols_results_all_1.csv' with actual file names)
+    write.csv(ols_results, file = paste0("ols_results_", place, "_", i, ".csv"), row.names = FALSE)
+    
+    # Fixed effects regression
+    fe_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + i.id_panelgroup + control, data = subset(final_data_combined, samplee))
+    fe_output <- coeftest(fe_model, vcov = vcovHC(fe_model, cluster = ~id_h))
+    
+    # Output fixed effects regression results
+    fe_results <- data.frame(
+      "Household controls" = "X",
+      "Municipality FE" = "X",
+      "Average non-migrant" = av1,
+      "F-test controls" = "",
+      ctitle = rep("", nrow(fe_output))
+    )
+    fe_results <- rbind(fe_results, cbind(fe_output[, 1], rownames(fe_output)))
+    
+    # Output fixed effects results table (replace 'fe_results_all_1.csv' with actual file names)
+    write.csv(fe_results, file = paste0("fe_results_", place, "_", i, ".csv"), row.names = FALSE)
+  }
+}
+
+# Output tables (replace 'ols_results_all_1.csv' with actual file names)
+# Table 4
+table4 <- read.csv("ols_results_all_1.csv")
+write.csv(table4, file = "Table4.csv", row.names = FALSE)
+
+# Table 5
+table5 <- read.csv("ols_results_urb_1.csv")
+write.csv(table5, file = "Table5.csv", row.names = FALSE)
+
+# Table 6
+table6 <- read.csv("ols_results_rur_1.csv")
+write.csv(table6, file = "Table6.csv", row.names = FALSE)
 ```
 
 
