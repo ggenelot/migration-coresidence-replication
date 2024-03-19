@@ -9,6 +9,9 @@ output: html_document
 library(haven)
 library(ggplot2)
 library(dplyr)
+library(lmtest)
+library(sandwich)
+install.packages("sandwich")
 ```
 
 
@@ -127,8 +130,8 @@ La fonction group permet dedonner un numéro idetifiant à touts les observation
 
 ```{r}
 # Creation des variables de controle
-final_data_combined$id_mun <- as.numeric(interaction(data$ENT, data$MUN))
-final_data_combined$id_panelgroup <- as.numeric(interaction(data$panel_group))
+final_data_combined$id_mun <- as.numeric(interaction(final_data_combined$ENT, final_data_combined$MUN))
+final_data_combined$id_panelgroup <- as.numeric(interaction(final_data_combined$panel_group))
 ```
 
 Les auteurs génèrent une variable globale demo_control, qui prend comme valeur le nom de la cohorte. 
@@ -153,8 +156,8 @@ nonhhnuclear_q1 est la valeur booléenne de l'expression "hhnuclear_q1==0" (=1 s
 
 ```{r}
 # valeur booleenne et label
-final_data_combined$nonhhnuclear_q1 <- ifelse(data$hhnuclear_q1 == 0, 1, 0)
-attr(data$nonhhnuclear_q1, "label") <- "non-nuclear household q1"
+final_data_combined$nonhhnuclear_q1 <- ifelse(final_data_combined$hhnuclear_q1 == 0, 1, 0)
+attr(final_data_combined$nonhhnuclear_q1, "label") <- "non-nuclear household q1" #retourne une erreur, on l enleve pour l instant = c est bon, c etait un probleme de variable mal nomme
 
 # stockage des variables de controle et de la variable i.hhmaxedu_q1
 control <- c(demo_control, "i.hhmaxedu_q1")
@@ -199,6 +202,85 @@ options <- list(
 ## Table 4, 5, 6 
 
 ```{r}
+column <- colnames(final_data_combined)
+```
+
+
+```{r}
+# Loop over different types of areas
+for (place in c("all", "urb", "rur")) {
+  # Create sample variable
+  samplee <- NULL
+  if (place == "all") {
+    samplee <- final_data_combined$present_N_ENT_12345 == 1 & final_data_combined$hh == 1
+  } else if (place == "rur") {
+    samplee <- final_data_combined$present_N_ENT_12345 == 1 & final_data_combined$hh == 1 & final_data_combined$ruralarea == 1
+  } else if (place == "urb") {
+    samplee <- final_data_combined$present_N_ENT_12345 == 1 & final_data_combined$hh == 1 & final_data_combined$ruralarea == 0
+  }
+  
+  # Calculate average non-migrant
+  av1 <- round(mean(final_data_combined$HHnewmember_allperiod[samplee]), 0.001)
+  
+  # Define control variables
+  # Mettez ici les noms de vos variables de contrôle
+  control <- c("hhmaxedu_q1")  # Ajoutez d'autres noms de variables si nécessaire
+  
+  # Perform regressions and output tables
+  for (i in 1:2) {
+    # OLS regression
+    ols_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + id_panelgroup, data = subset(final_data_combined, samplee)) #erreur ici, j'essaie de retirer control
+    ols_output <- coeftest(ols_model, vcov = vcovHC(ols_model, cluster = ~id_h))
+    
+    # Output OLS regression results
+    ols_results <- data.frame(
+      "Household controls" = "X",
+      "Municipality FE" = "",
+      "Average non-migrant" = av1,
+      "F-test controls" = "",
+      ctitle = rep("", nrow(ols_output))
+    )
+    ols_results <- rbind(ols_results, cbind(ols_output[, 1], rownames(ols_output)))
+    
+    # Output OLS results table (replace 'ols_results_all_1.csv' with actual file names)
+    write.csv(ols_results, file = paste0("ols_results_", place, "_", i, ".csv"), row.names = FALSE)
+    
+    # Fixed effects regression
+    fe_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + id_panelgroup + control, data = subset(final_data_combined, samplee))
+    fe_output <- coeftest(fe_model, vcov = vcovHC(fe_model, cluster = ~id_h))
+    
+    # Output fixed effects regression results
+    fe_results <- data.frame(
+      "Household controls" = "X",
+      "Municipality FE" = "X",
+      "Average non-migrant" = av1,
+      "F-test controls" = "",
+      ctitle = rep("", nrow(fe_output))
+    )
+    fe_results <- rbind(fe_results, cbind(fe_output[, 1], rownames(fe_output)))
+    
+    # Output fixed effects results table (replace 'fe_results_all_1.csv' with actual file names)
+    write.csv(fe_results, file = paste0("fe_results_", place, "_", i, ".csv"), row.names = FALSE)
+  }
+}
+
+# Output tables (replace 'ols_results_all_1.csv' with actual file names)
+# Table 4
+table4 <- read.csv("ols_results_all_1.csv")
+write.csv(table4, file = "Table4.csv", row.names = FALSE)
+
+# Table 5
+table5 <- read.csv("ols_results_urb_1.csv")
+write.csv(table5, file = "Table5.csv", row.names = FALSE)
+
+# Table 6
+table6 <- read.csv("ols_results_rur_1.csv")
+write.csv(table6, file = "Table6.csv", row.names = FALSE)
+
+```
+
+
+```{r}
 # Loop over different types of areas
 for (place in c("all", "urb", "rur")) {
   # Create sample variable
@@ -220,7 +302,7 @@ for (place in c("all", "urb", "rur")) {
   # Perform regressions and output tables
   for (i in 1:2) {
     # OLS regression
-    ols_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + i.id_panelgroup + control, data = subset(final_data_combined, samplee))
+    ols_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + id_panelgroup + control, data = subset(final_data_combined, samplee))
     ols_output <- coeftest(ols_model, vcov = vcovHC(ols_model, cluster = ~id_h))
     
     # Output OLS regression results
@@ -236,8 +318,10 @@ for (place in c("all", "urb", "rur")) {
     # Output OLS results table (replace 'ols_results_all_1.csv' with actual file names)
     write.csv(ols_results, file = paste0("ols_results_", place, "_", i, ".csv"), row.names = FALSE)
     
+    # ne marche pas avec i.id_panelgroup, j essaie avec juste id_panelgroup
+    
     # Fixed effects regression
-    fe_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + i.id_panelgroup + control, data = subset(final_data_combined, samplee))
+    fe_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + id_panelgroup + control, data = subset(final_data_combined, samplee))
     fe_output <- coeftest(fe_model, vcov = vcovHC(fe_model, cluster = ~id_h))
     
     # Output fixed effects regression results
