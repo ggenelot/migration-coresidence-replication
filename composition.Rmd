@@ -11,11 +11,9 @@ library(ggplot2)
 library(dplyr)
 library(lmtest)
 library(sandwich)
-install.packages("sandwich")
 ```
 
-
-Ce document cherche à reproduire le raisonnement de la section 4.1 de l'article. Il s'agit du rapport entre la migration et l'arrivée de nouveaux membres dans le foyer. 
+Ce document cherche à reproduire le raisonnement de la section 4.1 de l'article. Il s'agit du rapport entre la migration et l'arrivée de nouveaux membres dans le foyer.
 
 Plus généralement, il s'agit de répondre à cette question : « Do households that experience an international migration episode also undergo further changes in their composition? » ([Bertoli et Murard, 2020, p. 2](zotero://select/library/items/728S6LQ5)) ([pdf](zotero://open-pdf/library/items/TZXTC4Y6?page=2&annotation=5C3QP76M))
 
@@ -23,13 +21,11 @@ Plus généralement, il s'agit de répondre à cette question : « Do households
 
 ## Chargement des données
 
-Cette analyse va se réaliser sur l'échantillon (sans attrition) de 141,168 foyers. On cherche à le charger ici. 
+Cette analyse va se réaliser sur l'échantillon (sans attrition) de 141,168 foyers. On cherche à le charger ici.
 
 ### Charger et fusionner les fichiers
 
 Les donées sont réparties en différents fichiers, qui correspondent chacune à un panel. La première étape consiste à les charger un par un, puis à les fusionner pour avoir un fichier unique.
-
-
 
 ```{r}
 # Charger les fichiers
@@ -49,17 +45,20 @@ Les donées sont réparties en différents fichiers, qui correspondent chacune �
 
 ```
 
-Il semblerait que la quantité de données à traiter soit trop importante pour mon ordinateur. On va donc procéder avec uniquement un des panel, en faisant comme si c'était l'ensemble des panels. 
+Il semblerait que la quantité de données à traiter soit trop importante pour mon ordinateur. On va donc procéder avec uniquement un des panel, en faisant comme si c'était l'ensemble des panels.
 
 ```{r}
-final_data_combined <- read_dta("replication_data/data/final_data_panel_105.dta")
+
+ final_data_panel_105 <- read_dta("replication_data/data/final_data_panel_105.dta")
+final_data_panel_205 <- read_dta("replication_data/data/final_data_panel_205.dta")
+
+final_data_combined <- rbind(final_data_panel_105, final_data_panel_205)
 
 ```
 
-Il y a ensuite un certain nombre de pré-traitements qui sont réalisés dans le code original. Il faut comprendre à quoi ils servent pour voir ceux que l'on garde ou pas. 
+Il y a ensuite un certain nombre de pré-traitements qui sont réalisés dans le code original. Il faut comprendre à quoi ils servent pour voir ceux que l'on garde ou pas.
 
-Un des premiers consiste à drop toutes les colonnes qui commencent par __ : cap drop __*
-Il s'agit problement d'une sorte de sécurité pour éviter que les variables interragissent avec les variables internes de stata. 
+Un des premiers consiste à drop toutes les colonnes qui commencent par \_\_ : cap drop \_\_\* Il s'agit problement d'une sorte de sécurité pour éviter que les variables interragissent avec les variables internes de stata.
 
 ### Nettoyer les données
 
@@ -69,6 +68,7 @@ column_names <- colnames(final_data_combined)
 columns_with_double_underscore <- column_names[grep("^__", column_names)]
 print(columns_with_double_underscore)
 ```
+
 Dans tous les cas, cette mesure ne change rien à nos résultats puisqu'aucune variables n'est concernée. On peut donc sans crainte l'éxecuter.
 
 ```{r}
@@ -76,23 +76,18 @@ Dans tous les cas, cette mesure ne change rien à nos résultats puisqu'aucune v
 final_data_combined <- final_data_combined[, !grepl("^__", names(final_data_combined))]
 ```
 
-La seconde étape de pré-traitement consiste en renommer les variables : 
+La seconde étape de pré-traitement consiste en renommer les variables :
 
-label var HHnewmember_allperiod  "hh new memb all-period"
-label var HHnewmember  "new member joining" 
+label var HHnewmember_allperiod "hh new memb all-period" label var HHnewmember "new member joining"
 
 ```{r}
 attr(final_data_combined$HHnewmember_allperiod, "label") <- "hh new memb all-period"
 attr(final_data_combined$HHnewmember, "label") <- "new member joining"
 ```
 
-La troisième étape consiste en créer deux nouvelles variables : hh et hhper. La première désigne le numéro du foyer (HouseHold); la seconde  ??????? . Avant de créer ces deux variables, il convient de s'assure qu'aucune variable avec ces noms n'existe déjà, et de les supprimer si c'est le cas. 
+La troisième étape consiste en créer deux nouvelles variables : hh et hhper. La première désigne le numéro du foyer (HouseHold); la seconde ??????? . Avant de créer ces deux variables, il convient de s'assure qu'aucune variable avec ces noms n'existe déjà, et de les supprimer si c'est le cas.
 
-cap drop hh 
-	cap drop hhper 
-	bys id_h  : g hh = _n==1
-	bys id_h PER : g hhper = _n==1
-
+cap drop hh cap drop hhper bys id_h : g hh = \_n==1 bys id_h PER : g hhper = \_n==1
 
 ```{r}
 
@@ -124,7 +119,7 @@ final_data_combined <- final_data_combined %>%
 
 ### Controls
 
-Dans la section suivante, on génère plusieurs variables de contrôle. 
+Dans la section suivante, on génère plusieurs variables de contrôle.
 
 La fonction group permet dedonner un numéro idetifiant à touts les observations qui ont une même combinaison de facteur. Elle permet donc de créer des variables de contrôle. Ici, on veut une variable de contrôle (ENT et MUN), et une panel_group
 
@@ -132,10 +127,16 @@ La fonction group permet dedonner un numéro idetifiant à touts les observation
 # Creation des variables de controle
 final_data_combined$id_mun <- as.numeric(interaction(final_data_combined$ENT, final_data_combined$MUN))
 final_data_combined$id_panelgroup <- as.numeric(interaction(final_data_combined$panel_group))
-final_data_combined$id_panelgroup <- 
+# final_data_combined$id_panelgroup <- 
 ```
 
-Les auteurs génèrent une variable globale demo_control, qui prend comme valeur le nom de la cohorte. 
+```{r}
+unique(final_data_combined$panel_group)
+```
+
+=\> Il n'y a ici qu'une valeur de panel_group, puisqu'on n'a pas réussi à fusionner les différents groupes.
+
+Les auteurs génèrent une variable globale demo_control, qui prend comme valeur le nom de la cohorte.
 
 ```{r}
 demo_control <- character()
@@ -150,8 +151,7 @@ for (x in 1:Ncohorts) {
 
 ```
 
-
-Les auteurs génèrent ensuite d'autres variables : 
+Les auteurs génèrent ensuite d'autres variables :
 
 nonhhnuclear_q1 est la valeur booléenne de l'expression "hhnuclear_q1==0" (=1 si cette expression est vraie, 0 sinon)
 
@@ -164,7 +164,7 @@ attr(final_data_combined$nonhhnuclear_q1, "label") <- "non-nuclear household q1"
 control <- c(demo_control, "i.hhmaxedu_q1")
 ```
 
-Enfin, on renomme les variables : 
+Enfin, on renomme les variables :
 
 ```{r}
 
@@ -185,7 +185,7 @@ for (var in names(variable_labels)) {
 }
 ```
 
-La dernière ligne du code stata consiste à appliquer des options. Celles-ci sont transcrite comme suit en python. 
+La dernière ligne du code stata consiste à appliquer des options. Celles-ci sont transcrite comme suit en python.
 
 ```{r}
 # Set options
@@ -200,12 +200,68 @@ options <- list(
 
 ```
 
-## Table 4, 5, 6 
+## Table 4, 5, 6
 
 ```{r}
 column <- colnames(final_data_combined)
 ```
 
+On obtient l'erreur suivante :
+
+Error in model.frame.default(formula = HHnewmember_allperiod \~ HHusmig_allperiod + : variable lengths differ (found for 'control')
+
+Celle-ci indique que la variable control n'a pas la même longeur que les autres variables, ce qui ne permet pas de réaliser la régression. Voyons la longueur de cette variable pour essayer de comprendre ce qui ne fonctionne pas.
+
+```{r}
+# Define the variables used in the regression model
+regression_vars <- c("HHnewmember_allperiod", "HHusmig_allperiod", "HHusmig_fem_allperiod", "id_panelgroup", "factor(id_panelgroup)", control)
+
+# Get the length of each variable in the regression
+for (var in regression_vars) {
+  cat("Variable:", var, "\tLength:", length(subset(final_data_combined, samplee)[[var]]), "\n")
+}
+
+
+```
+
+Ce qui est assez étonnant ici, c'est que toutes les variables présentes dans notre régression semblent avoir la même longueur. On ne comprend donc pas d'où vient cette erreur. En ajoutant "factor(id_panelgroup)", c'est à dire la variable indicatrice de l'appartenance à un panelgroup.
+
+=\> pourtant, on obtient toujours la même erreur quand on retire factor(id_panelgroup). On la remet donc dans la régression
+
+=\> on essaie de remplacer control par la variable qui est contenue dans control, c'est à dire hhmaxedu_q1.
+
+Nouvelle erreur :
+
+```         
+Error in `contrasts<-`(`*tmp*`, value = contr.funs[1 + isOF[nn]]) : 
+  contrasts can be applied only to factors with 2 or more levels
+```
+
+D'après chatGPT, cette erreur arrive lorsque l'on essaie de créer une dummy à partir d'un variable catégorielle qui n'a qu'un niveau.
+
+```{r}
+# Check the levels of a categorical variable
+levels(factor(final_data_combined$id_panelgroup))
+levels(factor(final_data_combined$hhmaxedu_q1))
+
+```
+
+En effet, pour id_panelgroup, on n'a qu'un niveau.
+
+```{r}
+unique(final_data_combined$id_panelgroup)
+```
+
+C'est logique, puisqu'on a qu'une seule valeur possible pour id_panelgroup.
+
+Voyons comment on a défini cette variable. =\> l'explication est simple : il n'y a qu'un seul groupe de panel, puisque l'on n'a pas réussi à fusionner plusieurs groupes. Essayons de fusionner plusieurs panels.
+
+=\> En ajoutant un deuxième panel, on arrive à corriger cette erreur
+
+```         
+Error in rbind(deparse.level, ...) : 
+  numbers of columns of arguments do not match
+```
 
 ```{r}
 # Loop over different types of areas
@@ -231,7 +287,7 @@ place <- "all"
   # Perform regressions and output tables
   for (i in 1:2) {
     # OLS regression
-    ols_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + factor(id_panelgroup) + control, data = subset(final_data_combined, samplee)) #erreur ici, j'essaie de retirer control
+    ols_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + factor(id_panelgroup) + hhmaxedu_q1, data = subset(final_data_combined, samplee)) #erreur ici, j'essaie de retirer control
     ols_output <- coeftest(ols_model, vcov = vcovHC(ols_model, cluster = ~id_h))
     
     # Output OLS regression results
@@ -248,7 +304,7 @@ place <- "all"
     write.csv(ols_results, file = paste0("ols_results_", place, "_", i, ".csv"), row.names = FALSE)
     
     # Fixed effects regression
-    fe_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + factor(id_panelgroup) + control, data = subset(final_data_combined, samplee))
+    fe_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + factor(id_panelgroup) + hhmaxedu_q1, data = subset(final_data_combined, samplee))
     fe_output <- coeftest(fe_model, vcov = vcovHC(fe_model, cluster = ~id_h))
     
     #    # Output fixed effects regression results
