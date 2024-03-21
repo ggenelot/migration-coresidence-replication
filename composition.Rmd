@@ -11,6 +11,8 @@ library(ggplot2)
 library(dplyr)
 library(lmtest)
 library(sandwich)
+library(stargazer)
+library(broom)
 ```
 
 Ce document cherche à reproduire le raisonnement de la section 4.1 de l'article. Il s'agit du rapport entre la migration et l'arrivée de nouveaux membres dans le foyer.
@@ -263,6 +265,17 @@ Error in rbind(deparse.level, ...) :
   numbers of columns of arguments do not match
 ```
 
+Il s'agit d'une erreur qui survient quand le nombre de colonnes des différents objets que l'on cherche à fusionner est différent.
+
+Regardons quel est le nombre de colonnes de ols_output et OLS results\
+\
+
+```{r}
+ncol(ols_output)
+ncol(ols_output[ ,1])
+ncol(ols_results)
+```
+
 ```{r}
 # Loop over different types of areas
 #for (place in c("all", "urb", "rur")) {
@@ -290,36 +303,66 @@ place <- "all"
     ols_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + factor(id_panelgroup) + hhmaxedu_q1, data = subset(final_data_combined, samplee)) #erreur ici, j'essaie de retirer control
     ols_output <- coeftest(ols_model, vcov = vcovHC(ols_model, cluster = ~id_h))
     
-    # Output OLS regression results
-    ols_results <- data.frame(
-      "Household controls" = "X",
-      "Municipality FE" = "",
-      "Average non-migrant" = av1,
-      "F-test controls" = "",
-      ctitle = rep("", nrow(ols_output))
+    summary_ols <- summary(ols_model)
+    
+    # Obtenir les valeurs du test de F
+    F_test <- summary_ols$fstatistic
+    F_value <- F_test[1]
+    F_p_value <- F_test[3]
+
+    # Créer une table de régression
+    regression_table <- stargazer(
+      ols_model,
+      type = "text",
+      title = "Regression Results",
+      align = TRUE,
+      dep.var.caption = "Dependent Variable:",
+      dep.var.labels = "HHnewmember_allperiod",
+      covariate.labels = c("HHusmig_allperiod", "HHusmig_fem_allperiod",       paste("id_panelgroup", levels(final_data_combined$id_panelgroup),        sep = "_"), "control"),
+      omit.stat = c("ser", "f"),
+      single.row = TRUE,
+      star.cutoffs = c(0.05, 0.01, 0.001),
+      add.lines = list(c("Household controls", "X"), 
+                       c("Municipality FE", ""), 
+                       c("Average non-migrant", av1), 
+                       c("F-test controls", F_value)),
+      add.lines.after = "\\end{tabular}"
     )
-    ols_results <- rbind(ols_results, cbind(ols_output[, 1], rownames(ols_output)))
+
+# Afficher la table de régression
+cat(regression_table)
     
-    # Output OLS results table (replace 'ols_results_all_1.csv' with actual file names)
-    write.csv(ols_results, file = paste0("ols_results_", place, "_", i, ".csv"), row.names = FALSE)
     
-    # Fixed effects regression
-    fe_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + factor(id_panelgroup) + hhmaxedu_q1, data = subset(final_data_combined, samplee))
-    fe_output <- coeftest(fe_model, vcov = vcovHC(fe_model, cluster = ~id_h))
+    # # Output OLS regression results
+    # ols_results <- data.frame(
+    #   "Household controls" = "X",
+    #   "Municipality FE" = "",
+    #   "Average non-migrant" = av1,
+    #   "F-test controls" = "",
+    #   ctitle = rep("", nrow(ols_output))
+    # )
+    # ols_results <- rbind(ols_results, cbind(ols_output[, 1], rownames(ols_output)))
+    # 
+    # # Output OLS results table (replace 'ols_results_all_1.csv' with actual file names)
+    # write.csv(ols_results, file = paste0("ols_results_", place, "_", i, ".csv"), row.names = FALSE)
     
-    #    # Output fixed effects regression results
-    fe_results <- data.frame(
-      "Household controls" = "X",
-      "Municipality FE" = "X",
-      "Average non-migrant" = av1,
-      "F-test controls" = "",
-      ctitle = rep("", nrow(fe_output))
-    )
-    fe_results <- cbind.data.frame(fe_results, fe_output[, 1, drop = FALSE])
-    fe_results <- cbind(fe_results, rownames = rownames(fe_output))
-    
-    # Output fixed effects results table (replace 'fe_results_all_1.csv' with actual file names)
-    write.csv(fe_results, file = paste0("fe_results_", place, "_", i, ".csv"), row.names = FALSE)
+    # # Fixed effects regression
+    # fe_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + factor(id_panelgroup) + hhmaxedu_q1, data = subset(final_data_combined, samplee))
+    # fe_output <- coeftest(fe_model, vcov = vcovHC(fe_model, cluster = ~id_h))
+    # 
+    # #    # Output fixed effects regression results
+    # fe_results <- data.frame(
+    #   "Household controls" = "X",
+    #   "Municipality FE" = "X",
+    #   "Average non-migrant" = av1,
+    #   "F-test controls" = "",
+    #   ctitle = rep("", nrow(fe_output))
+    # )
+    # fe_results <- cbind.data.frame(fe_results, fe_output[, 1, drop = FALSE])
+    # fe_results <- cbind(fe_results, rownames = rownames(fe_output))
+    # 
+    # # Output fixed effects results table (replace 'fe_results_all_1.csv' with actual file names)
+    # write.csv(fe_results, file = paste0("fe_results_", place, "_", i, ".csv"), row.names = FALSE)
 
   }
 #}
