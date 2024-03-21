@@ -278,8 +278,8 @@ ncol(ols_results)
 
 ```{r}
 # Loop over different types of areas
-#for (place in c("all", "urb", "rur")) {
-place <- "all"
+for (place in c("all", "urb", "rur")) {
+#place <- "all"
   # Create sample variable
   samplee <- NULL
   if (place == "all") {
@@ -303,34 +303,34 @@ place <- "all"
     ols_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + factor(id_panelgroup) + hhmaxedu_q1, data = subset(final_data_combined, samplee)) #erreur ici, j'essaie de retirer control
     ols_output <- coeftest(ols_model, vcov = vcovHC(ols_model, cluster = ~id_h))
     
-    summary_ols <- summary(ols_model)
-    
-    # Obtenir les valeurs du test de F
-    F_test <- summary_ols$fstatistic
-    F_value <- F_test[1]
-    F_p_value <- F_test[3]
+    # summary_ols <- summary(ols_model)
+    # 
+    # # Obtenir les valeurs du test de F
+    # F_test <- summary_ols$fstatistic
+    # F_value <- F_test[1]
+    # F_p_value <- F_test[3]
+    # 
+    # # Créer une table de régression
+    # regression_table <- stargazer(
+    #   ols_model,
+    #   type = "text",
+    #   title = "Regression Results",
+    #   align = TRUE,
+    #   dep.var.caption = "Dependent Variable:",
+    #   dep.var.labels = "HHnewmember_allperiod",
+    #   covariate.labels = c("HHusmig_allperiod", "HHusmig_fem_allperiod",       paste("id_panelgroup", levels(final_data_combined$id_panelgroup),        sep = "_"), "control"),
+    #   omit.stat = c("ser", "f"),
+    #   single.row = TRUE,
+    #   star.cutoffs = c(0.05, 0.01, 0.001),
+    #   add.lines = list(c("Household controls", "X"), 
+    #                    c("Municipality FE", ""), 
+    #                    c("Average non-migrant", av1), 
+    #                    c("F-test controls", F_value)),
+    #   add.lines.after = "\\end{tabular}"
+    # )
 
-    # Créer une table de régression
-    regression_table <- stargazer(
-      ols_model,
-      type = "text",
-      title = "Regression Results",
-      align = TRUE,
-      dep.var.caption = "Dependent Variable:",
-      dep.var.labels = "HHnewmember_allperiod",
-      covariate.labels = c("HHusmig_allperiod", "HHusmig_fem_allperiod",       paste("id_panelgroup", levels(final_data_combined$id_panelgroup),        sep = "_"), "control"),
-      omit.stat = c("ser", "f"),
-      single.row = TRUE,
-      star.cutoffs = c(0.05, 0.01, 0.001),
-      add.lines = list(c("Household controls", "X"), 
-                       c("Municipality FE", ""), 
-                       c("Average non-migrant", av1), 
-                       c("F-test controls", F_value)),
-      add.lines.after = "\\end{tabular}"
-    )
-
-# Afficher la table de régression
-cat(regression_table)
+    # Afficher la table de régression
+    #cat(regression_table)
     
     
     # # Output OLS regression results
@@ -341,15 +341,16 @@ cat(regression_table)
     #   "F-test controls" = "",
     #   ctitle = rep("", nrow(ols_output))
     # )
+    # 
     # ols_results <- rbind(ols_results, cbind(ols_output[, 1], rownames(ols_output)))
-    # 
-    # # Output OLS results table (replace 'ols_results_all_1.csv' with actual file names)
-    # write.csv(ols_results, file = paste0("ols_results_", place, "_", i, ".csv"), row.names = FALSE)
+
+    # Output OLS results table (replace 'ols_results_all_1.csv' with actual file names)
+    write.csv(ols_output, file = paste0("output/ols/ols_output_", place, "_", i, ".csv"), row.names = TRUE)
     
-    # # Fixed effects regression
-    # fe_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + factor(id_panelgroup) + hhmaxedu_q1, data = subset(final_data_combined, samplee))
-    # fe_output <- coeftest(fe_model, vcov = vcovHC(fe_model, cluster = ~id_h))
-    # 
+    # Fixed effects regression
+    fe_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + factor(id_panelgroup) + hhmaxedu_q1, data = subset(final_data_combined, samplee))
+    fe_output <- coeftest(fe_model, vcov = vcovHC(fe_model, cluster = ~id_h))
+
     # #    # Output fixed effects regression results
     # fe_results <- data.frame(
     #   "Household controls" = "X",
@@ -360,13 +361,28 @@ cat(regression_table)
     # )
     # fe_results <- cbind.data.frame(fe_results, fe_output[, 1, drop = FALSE])
     # fe_results <- cbind(fe_results, rownames = rownames(fe_output))
-    # 
-    # # Output fixed effects results table (replace 'fe_results_all_1.csv' with actual file names)
-    # write.csv(fe_results, file = paste0("fe_results_", place, "_", i, ".csv"), row.names = FALSE)
+
+    # Output fixed effects results table (replace 'fe_results_all_1.csv' with actual file names)
+    write.csv(fe_output, file = paste0("output/fe/fe_output_", place, "_", i, ".csv"), row.names = TRUE)
 
   }
-#}
+}
 
+```
+
+```{r}
+ols_output
+```
+
+```{r}
+ols_results
+```
+
+Finalement cette partie que ChatGPT essaie de faire n'est peut être pas si importante ? On peut toujours remettre en forme la table ensuite.
+
+On récupère les résultats des régressions pour les écrire dans des tables
+
+```{r}
 # Output tables (replace 'ols_results_all_1.csv' with actual file names)
 # Table 4
 table4 <- read.csv("ols_results_all_1.csv")
@@ -379,5 +395,4 @@ write.csv(table5, file = "Table5.csv", row.names = FALSE)
 # Table 6
 table6 <- read.csv("ols_results_rur_1.csv")
 write.csv(table6, file = "Table6.csv", row.names = FALSE)
-
 ```
