@@ -278,94 +278,78 @@ ncol(ols_results)
 
 ```{r}
 # Loop over different types of areas
-for (place in c("all", "urb", "rur")) {
+for (place in c("all", "urban areas", "rural areas")) {
 #place <- "all"
   # Create sample variable
   samplee <- NULL
   if (place == "all") {
     samplee <- final_data_combined$present_N_ENT_12345 == 1 & final_data_combined$hh == 1
-  } else if (place == "rur") {
+  } else if (place == "rural areas") {
     samplee <- final_data_combined$present_N_ENT_12345 == 1 & final_data_combined$hh == 1 & final_data_combined$ruralarea == 1
-  } else if (place == "urb") {
+  } else if (place == "urban areas") {
     samplee <- final_data_combined$present_N_ENT_12345 == 1 & final_data_combined$hh == 1 & final_data_combined$ruralarea == 0
   }
+  
+  # Preparation du ficher en sortie 
+  output_file <- paste0("output/table ", place, ".tex")
   
   # Calculate average non-migrant
   av1 <- round(mean(final_data_combined$HHnewmember_allperiod[samplee]), 0.001)
   
-  # Define control variables
-  # Mettez ici les noms de vos variables de contrôle
-  control <- c("hhmaxedu_q1")  # Ajoutez d'autres noms de variables si nécessaire
   
-  # Perform regressions and output tables
-  for (i in 1:2) {
-    # OLS regression
-    ols_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + factor(id_panelgroup) + hhmaxedu_q1, data = subset(final_data_combined, samplee)) #erreur ici, j'essaie de retirer control
-    ols_output <- coeftest(ols_model, vcov = vcovHC(ols_model, cluster = ~id_h))
+    ## regressions avec juste hhusmig_allperiod
     
-    # summary_ols <- summary(ols_model)
-    # 
-    # # Obtenir les valeurs du test de F
-    # F_test <- summary_ols$fstatistic
-    # F_value <- F_test[1]
-    # F_p_value <- F_test[3]
-    # 
-    # # Créer une table de régression
-    # regression_table <- stargazer(
-    #   ols_model,
-    #   type = "text",
-    #   title = "Regression Results",
-    #   align = TRUE,
-    #   dep.var.caption = "Dependent Variable:",
-    #   dep.var.labels = "HHnewmember_allperiod",
-    #   covariate.labels = c("HHusmig_allperiod", "HHusmig_fem_allperiod",       paste("id_panelgroup", levels(final_data_combined$id_panelgroup),        sep = "_"), "control"),
-    #   omit.stat = c("ser", "f"),
-    #   single.row = TRUE,
-    #   star.cutoffs = c(0.05, 0.01, 0.001),
-    #   add.lines = list(c("Household controls", "X"), 
-    #                    c("Municipality FE", ""), 
-    #                    c("Average non-migrant", av1), 
-    #                    c("F-test controls", F_value)),
-    #   add.lines.after = "\\end{tabular}"
-    # )
-
-    # Afficher la table de régression
-    #cat(regression_table)
+    ### Muncicipality FE
     
+    reg1 <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + factor(id_panelgroup), data = subset(final_data_combined, samplee))
     
-    # # Output OLS regression results
-    # ols_results <- data.frame(
-    #   "Household controls" = "X",
-    #   "Municipality FE" = "",
-    #   "Average non-migrant" = av1,
-    #   "F-test controls" = "",
-    #   ctitle = rep("", nrow(ols_output))
-    # )
-    # 
-    # ols_results <- rbind(ols_results, cbind(ols_output[, 1], rownames(ols_output)))
-
-    # Output OLS results table (replace 'ols_results_all_1.csv' with actual file names)
-    #write.csv(ols_output, file = paste0("output/ols/ols_output_", place, "_", i, ".csv"), row.names = TRUE)
+    ### Households controls 
     
-    # Fixed effects regression
-    fe_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + factor(id_panelgroup) + hhmaxedu_q1, data = subset(final_data_combined, samplee))
-    fe_output <- coeftest(fe_model, vcov = vcovHC(fe_model, cluster = ~id_h))
+    reg2 <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + factor(id_panelgroup) + hhmaxedu_q1, data = subset(final_data_combined, samplee))
+    
+    ### Muncicipality FE + Households controls 
+    
+    reg3 <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + factor(id_panelgroup) + hhmaxedu_q1, data = subset(final_data_combined, samplee))
+    
+    ## regression avec hhusmig_allperiod +  HHusmig_fem_allperiod
+    
+    ### Muncicipality FE
+    
+    reg4 <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + factor(id_panelgroup), data = subset(final_data_combined, samplee))
+    
+    ### Households controls 
+    
+    reg5 <- lm(HHnewmember_allperiod ~ HHusmig_allperiod +  HHusmig_fem_allperiod + factor(id_panelgroup) + hhmaxedu_q1, data = subset(final_data_combined, samplee))
+    
+    ### Muncicipality FE + Households controls 
+    
+    reg6 <- lm(HHnewmember_allperiod ~ HHusmig_allperiod +  HHusmig_fem_allperiod + factor(id_panelgroup) + hhmaxedu_q1, data = subset(final_data_combined, samplee))
+    
+table <- stargazer(reg1, reg2, reg3, reg4, reg5, reg6, 
+              title = paste("Table", place, ": Migrant households and new members (", place, ")"),  # Titre de la table, 
+              align = TRUE, 
+              type ="latex", 
+              header = FALSE,            # Ne pas afficher l'en-tête
+              digits = 3,                # Nombre de décimales
+              omit = c("factor(id_panelgroup)2", "hhmaxedu_q1","Constant"),         # Omettre la constante
+              star.cutoffs = c(0.10, 0.05, 0.01), 
+              covariate.labels = c("$m^q_j$ ", "Female migrant(s)"), 
+              dep.var.caption = "Dependant variable: $n^q_j$", 
+              dep.var.labels.include = FALSE,
+              add.lines = list(
+                   c("Controls", "No", "Yes", "Yes", "No", "Yes", "Yes"),
+                   c("Municipality FE", "No", "No", "Yes", "No", "No", "Yes"),
+                   c("Quarter FE", "Yes", "Yes", "Yes", "Yes", "Yes", "Yes")),
+              omit.stat = c("ser", "f"), 
+              float = FALSE, 
+              notes = "NOTES",
+                #"\\textit{Notes:} $^{***},^{**},^{*}$ denote significance at the 1, 5 and 10 percent level respectively; standard errors are robust to heteroskedasticity; $nq_j$ is a dummy variable equal to 1 if household $j$ reports at least one new member over the period of observation, and 0 otherwise; $mq_j$ is a dummy variable equal to 1 if household $j$ reports at least one international migrant over the period of observation, and 0 otherwise; female is a dummy variable equal to 1 if at least one of the household members who migrate is a woman; the $F$ -test is performed on the null hypothesis that the coefficients of all household controls are jointly zero; the household controls are measured at the time of the first interview. \\textit{Source:} Reproduced with data and method from Bertoli et Murard (2020)",
+            notes.align = "l",  
+            notes.append = TRUE,   
+              out=output_file
+)
 
-    # #    # Output fixed effects regression results
-    # fe_results <- data.frame(
-    #   "Household controls" = "X",
-    #   "Municipality FE" = "X",
-    #   "Average non-migrant" = av1,
-    #   "F-test controls" = "",
-    #   ctitle = rep("", nrow(fe_output))
-    # )
-    # fe_results <- cbind.data.frame(fe_results, fe_output[, 1, drop = FALSE])
-    # fe_results <- cbind(fe_results, rownames = rownames(fe_output))
-
-    # Output fixed effects results table (replace 'fe_results_all_1.csv' with actual file names)
-    #write.csv(fe_output, file = paste0("output/fe/fe_output_", place, "_", i, ".csv"), row.names = TRUE)
-
-  }
+    
 }
 
 ```
