@@ -345,7 +345,7 @@ for (place in c("all", "urb", "rur")) {
     # ols_results <- rbind(ols_results, cbind(ols_output[, 1], rownames(ols_output)))
 
     # Output OLS results table (replace 'ols_results_all_1.csv' with actual file names)
-    write.csv(ols_output, file = paste0("output/ols/ols_output_", place, "_", i, ".csv"), row.names = TRUE)
+    #write.csv(ols_output, file = paste0("output/ols/ols_output_", place, "_", i, ".csv"), row.names = TRUE)
     
     # Fixed effects regression
     fe_model <- lm(HHnewmember_allperiod ~ HHusmig_allperiod + HHusmig_fem_allperiod + factor(id_panelgroup) + hhmaxedu_q1, data = subset(final_data_combined, samplee))
@@ -363,7 +363,7 @@ for (place in c("all", "urb", "rur")) {
     # fe_results <- cbind(fe_results, rownames = rownames(fe_output))
 
     # Output fixed effects results table (replace 'fe_results_all_1.csv' with actual file names)
-    write.csv(fe_output, file = paste0("output/fe/fe_output_", place, "_", i, ".csv"), row.names = TRUE)
+    #write.csv(fe_output, file = paste0("output/fe/fe_output_", place, "_", i, ".csv"), row.names = TRUE)
 
   }
 }
